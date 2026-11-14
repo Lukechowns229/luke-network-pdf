@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luke Network PDF Form Filler</title>
+<style>
+:root{--bg:#f4f6fa;--panel:#fff;--ink:#172033;--muted:#687386;--line:#dce2eb;--accent:#3157d5;--accent2:#eaf0ff;--danger:#b42318;--shadow:0 8px 28px rgba(25,38,65,.08)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:#101a32;color:#fff;padding:17px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{font-weight:750;font-size:18px;letter-spacing:.2px}.brand small{display:block;font-size:11px;color:#b9c5df;font-weight:500;letter-spacing:1.4px;text-transform:uppercase}
+main{max-width:1400px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow)}
+.toolbar{padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+button,.button,select,input[type=text],input[type=date],textarea{font:inherit}
+button,.button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:600}
+button:hover,.button:hover{border-color:#9eadd0;background:#f8faff}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.primary:hover{background:#2446b9}button.danger{color:var(--danger)}
+button:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=text],input[type=date],textarea{border:1px solid var(--line);border-radius:7px;padding:8px;background:#fff;color:var(--ink);max-width:100%}
+input[type=file]{display:none}.upload{display:inline-flex;align-items:center;gap:7px}
+.workspace{padding:14px;min-height:520px;overflow:auto}
+.empty{min-height:480px;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.empty strong{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+#pageWrap{position:relative;margin:0 auto;background:white;box-shadow:0 2px 16px #1b29401c;max-width:100%;width:max-content}
+#pdfCanvas{display:block;max-width:100%;height:auto}
+#overlay{position:absolute;inset:0;pointer-events:none}
+.field{position:absolute;border:1.5px solid #3157d5;background:rgba(234,240,255,.78);min-width:28px;min-height:20px;pointer-events:auto;display:flex;align-items:stretch;border-radius:3px;overflow:visible}
+.field.selected{outline:2px solid #f0a000;z-index:5}
+.field.editing{cursor:move}
+.field .fieldInput{width:100%;min-width:0;border:0;background:rgba(255,255,255,.82);padding:2px 4px;font-size:12px;border-radius:2px;outline:none}
+.field input[type=checkbox]{margin:auto;width:17px;height:17px}
+.field .fieldLabel{position:absolute;left:0;top:-17px;white-space:nowrap;font-size:10px;color:#173a9b;background:#fff;padding:0 3px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.resize{position:absolute;width:10px;height:10px;right:-5px;bottom:-5px;background:#3157d5;border:1px solid white;border-radius:2px;cursor:nwse-resize}
+.side{padding:15px;display:flex;flex-direction:column;gap:13px}
+.side h2{font-size:15px;margin:0}.side p{margin:0;color:var(--muted);font-size:12px}
+.group{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.row>*{flex:1}
+.status{font-size:12px;color:var(--muted);min-height:18px}
+.fieldList{display:grid;gap:6px;max-height:240px;overflow:auto}
+.fieldItem{display:flex;align-items:center;gap:6px;padding:7px;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+.fieldItem.active{border-color:#e2a100;background:#fff9e9}.fieldItem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.note{background:#f7f9fd;border:1px solid var(--line);padding:9px;border-radius:8px;font-size:11px;color:var(--muted)}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:10px 16px 22px}
+.hidden{display:none!important}
+@media(max-width:900px){main{grid-template-columns:1fr}.side{order:-1}.workspace{min-height:350px}#pageWrap{max-width:100%}}
+</style>
+</head>
+<body>
+<header><div class="brand">Luke Network <small>PDF Form Filler</small></div><div class="row" style="flex:0 1 auto"><button id="modeEdit" class="primary">Edit fields</button><button id="modeFill">Fill form</button><button id="download" class="primary" disabled>Download completed PDF</button></div></header>
+<main>
+<section class="panel">
+ <div class="toolbar">
+  <label class="button upload">＋ Upload PDF<input id="file" type="file" accept="application/pdf"></label>
+  <button id="prev" disabled>← Previous</button><span id="pageInfo" class="status">No PDF loaded</span><button id="next" disabled>Next →</button>
+  <span style="flex:1"></span><button id="zoomOut" disabled>−</button><button id="zoomIn" disabled>＋</button>
+ </div>
+ <div class="workspace">
+  <div id="empty" class="empty"><div><strong>Turn a static PDF into a fillable form</strong>Upload a PDF to get started.<br>Auto-detect likely fields with OCR, or place fields manually.</div></div>
+  <div id="pageWrap" class="hidden"><canvas id="pdfCanvas"></canvas><div id="overlay"></div></div>
+ </div>
+</section>
+<aside class="panel side">
+ <div><h2>Form builder</h2><p>Add fields manually or try automatic detection.</p></div>
+ <div class="group">
+  <label for="fieldType">New field type</label>
+  <select id="fieldType"><option value="text">Text field</option><option value="date">Date field</option><option value="checkbox">Checkbox</option></select>
+  <button id="addField" disabled>＋ Add field to page</button>
+  <button id="autoDetect" disabled>✨ Auto-detect fields (OCR)</button>
+  <div id="status" class="status" aria-live="polite">Upload a PDF to begin.</div>
+ </div>
+ <div class="group">
+  <h2>Selected field</h2>
+  <label>Field label</label><input id="labelEdit" type="text" placeholder="e.g. Full name" disabled>
+  <div class="row"><button id="deleteField" class="danger" disabled>Delete field</button><button id="duplicateField" disabled>Duplicate</button></div>
+  <div class="note">In Edit fields mode, click “Add field”, then click the PDF where the field should appear. Drag a field to move it; use its bottom-right handle to resize it.</div>
+ </div>
+ <div class="group">
+  <h2>Fields in this PDF</h2><div id="fieldList" class="fieldList"><span class="status">No fields yet.</span></div>
+ </div>
+ <div class="note">Privacy: PDF processing and form filling happen in this browser tab. The PDF is not uploaded to Luke Network by this demo. PDF.js, PDF-lib and OCR libraries load from public CDNs.</div>
+</aside>
+</main>
+<footer>Luke Network · Browser-based PDF form filler · Review the completed PDF before submitting it.</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const state = {pdfBytes:null,pdfDoc:null,page:1,total:0,scale:1.25,fields:[],selected:null,mode:'edit',pending:false,renderTask:null};
+const canvas=$('pdfCanvas'), ctx=canvas.getContext('2d'), overlay=$('overlay');
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const say = msg => $('status').textContent=msg;
+const uid = () => 'f'+Math.random().toString(36).slice(2,10);
+const currentFields = () => state.fields.filter(f=>f.page===state.page);
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+
+$('file').addEventListener('change', async e=>{
+ const file=e.target.files[0]; if(!file)return;
+ try{
+  if(!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) throw Error('Please choose a PDF file.');
+  say('Loading PDF…'); state.pdfBytes=await file.arrayBuffer(); state.pdfDoc=await pdfjsLib.getDocument({data:state.pdfBytes.slice(0)}).promise;
+  state.page=1;state.total=state.pdfDoc.numPages;state.fields=[];state.selected=null;
+  $('empty').classList.add('hidden');$('pageWrap').classList.remove('hidden');
+  ['prev','next','zoomIn','zoomOut','addField','autoDetect','download'].forEach(id=>$(id).disabled=false);
+  renderPage();say('PDF loaded. Add fields or run automatic detection.');
+ }catch(err){say('Could not open PDF: '+err.message);}
+});
+async function renderPage(){
+ if(!state.pdfDoc)return;
+ try{
+  if(state.renderTask)state.renderTask.cancel();
+  const page=await state.pdfDoc.getPage(state.page), viewport=page.getViewport({scale:state.scale});
+  canvas.width=viewport.width;canvas.height=viewport.height;canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
+  overlay.style.width=viewport.width+'px';overlay.style.height=viewport.height+'px';
+  state.renderTask=page.render({canvasContext:ctx,viewport});await state.renderTask.promise;
+ }catch(e){if(e.name!=='RenderingCancelledException')console.error(e);}
+ $('pageInfo').textContent=`Page ${state.page} of ${state.total}`;
+ $('prev').disabled=state.page<=1;$('next').disabled=state.page>=state.total;
+ $('zoomIn').disabled=false;$('zoomOut').disabled=false;
+ drawFields();renderList();
+}
+function drawFields(){
+ overlay.innerHTML='';
+ currentFields().forEach(f=>{
+  const el=document.createElement('div');el.className='field'+(state.selected===f.id?' selected':'')+(state.mode==='edit'?' editing':'');
+  el.dataset.id=f.id;el.style.left=(f.x*canvas.width)+'px';el.style.top=(f.y*canvas.height)+'px';el.style.width=(f.w*canvas.width)+'px';el.style.height=(f.h*canvas.height)+'px';
+  if(state.mode==='edit'){
+   const label=document.createElement('div');label.className='fieldLabel';label.textContent=f.label||f.type;el.appendChild(label);
+  }
+  if(f.type==='checkbox'){
+   const input=document.createElement('input');input.type='checkbox';input.checked=!!f.value;input.disabled=state.mode==='edit';input.addEventListener('change',()=>f.value=input.checked);el.appendChild(input);
+  }else{
+   const input=document.createElement('input');input.className='fieldInput';input.type=f.type==='date'?'date':'text';input.placeholder=state.mode==='edit'?(f.label||'Text'):'Enter '+(f.label||'value');input.value=f.value||'';input.disabled=state.mode==='edit';input.addEventListener('input',()=>f.value=input.value);el.appendChild(input);
+  }
+  if(state.mode==='edit'){
+   const handle=document.createElement('div');handle.className='resize';el.appendChild(handle);
+   el.addEventListener('pointerdown',ev=>{
+    if(ev.target===handle)return;
+    state.selected=f.id;drawFields();renderList();
+    const startX=ev.clientX,startY=ev.clientY,ox=f.x,oy=f.y;
+    el.setPointerCapture(ev.pointerId);
+    const move=e=>{f.x=clamp(ox+(e.clientX-startX)/canvas.width,0,1-f.w);f.y=clamp(oy+(e.clientY-startY)/canvas.height,0,1-f.h);el.style.left=f.x*canvas.width+'px';el.style.top=f.y*canvas.height+'px';};
+    const end=()=>{el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);renderList();};
+    el.addEventListener('pointermove',move);el.addEventListener('pointerup',end);
+   });
+   handle.addEventListener('pointerdown',ev=>{
+    ev.stopPropagation();const sx=ev.clientX,sy=ev.clientY,sw=f.w,sh=f.h;
+    handle.setPointerCapture(ev.pointerId);
+    const move=e=>{f.w=clamp(sw+(e.clientX-sx)/canvas.width,.035,1-f.x);f.h=clamp(sh+(e.clientY-sy)/canvas.height,.018,1-f.y);el.style.width=f.w*canvas.width+'px';el.style.height=f.h*canvas.height+'px';};
+    const end=()=>{handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',end);renderList();};
+    handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);
+   });
+   el.addEventListener('click',()=>selectField(f.id));
+  }
+  overlay.appendChild(el);
+ });
+ updateSelectionControls();
+}
+function selectField(id){state.selected=id;const f=state.fields.find(x=>x.id===id);$('labelEdit').value=f?.label||'';drawFields();renderList();}
+function updateSelectionControls(){
+ const f=state.fields.find(x=>x.id===state.selected);
+ $('labelEdit').disabled=!f||state.mode!=='edit';$('deleteField').disabled=!f||state.mode!=='edit';$('duplicateField').disabled=!f||state.mode!=='edit';
+ if(f)$('labelEdit').value=f.label||'';
+}
+function renderList(){
+ const list=$('fieldList');list.innerHTML='';
+ if(!state.fields.length){list.innerHTML='<span class="status">No fields yet.</span>';return;}
+ state.fields.forEach(f=>{
+  const b=document.createElement('div');b.className='fieldItem'+(f.id===state.selected?' active':'');
+  const s=document.createElement('span');s.textContent=`${f.label||'Untitled'} · ${f.type} · page ${f.page}`;
+  const jump=document.createElement('button');jump.textContent='Go';jump.style.padding='3px 7px';jump.addEventListener('click',async ev=>{ev.stopPropagation();state.page=f.page;await renderPage();selectField(f.id);});
+  b.append(s,jump);b.addEventListener('click',()=>{if(state.page!==f.page){state.page=f.page;renderPage().then(()=>selectField(f.id));}else selectField(f.id);});list.appendChild(b);
+ });
+}
+$('labelEdit').addEventListener('input',e=>{const f=state.fields.find(x=>x.id===state.selected);if(f){f.label=e.target.value;drawFields();renderList();}});
+$('addField').addEventListener('click',()=>{state.pending=true;say('Click on the PDF page to place the new field.');});
+overlay.addEventListener('click',e=>{
+ if(!state.pending||state.mode!=='edit')return;
+ const r=overlay.getBoundingClientRect(),type=$('fieldType').value;
+ const f={id:uid(),page:state.page,type,label:type==='checkbox'?'Checkbox':type==='date'?'Date':'Text field',value:type==='checkbox'?false:'',x:clamp((e.clientX-r.left)/r.width,0,.94),y:clamp((e.clientY-r.top)/r.height,0,.96),w:type==='checkbox'?.035:.27,h:type==='checkbox'?.035:.045};
+ state.fields.push(f);state.selected=f.id;state.pending=false;drawFields();renderList();say('Field added. Drag or resize it, then edit its label.');
+});
+$('deleteField').addEventListener('click',()=>{state.fields=state.fields.filter(f=>f.id!==state.selected);state.selected=null;drawFields();renderList();});
+$('duplicateField').addEventListener('click',()=>{const f=state.fields.find(x=>x.id===state.selected);if(!f)return;const c={...f,id:uid(),x:Math.min(.96-f.w,f.x+.025),y:Math.min(.96-f.h,f.y+.025),label:(f.label||'Field')+' copy'};state.fields.push(c);state.selected=c.id;drawFields();renderList();});
+$('prev').addEventListener('click',()=>{if(state.page>1){state.page--;renderPage();}});
+$('next').addEventListener('click',()=>{if(state.page<state.total){state.page++;renderPage();}});
+$('zoomIn').addEventListener('click',()=>{state.scale=Math.min(2.5,state.scale+.15);renderPage();});
+$('zoomOut').addEventListener('click',()=>{state.scale=Math.max(.6,state.scale-.15);renderPage();});
+$('modeEdit').addEventListener('click',()=>setMode('edit'));
+$('modeFill').addEventListener('click',()=>setMode('fill'));
+function setMode(mode){state.mode=mode;state.pending=false;$('modeEdit').classList.toggle('primary',mode==='edit');$('modeFill').classList.toggle('primary',mode==='fill');$('addField').disabled=mode!=='edit'||!state.pdfDoc;$('autoDetect').disabled=mode!=='edit'||!state.pdfDoc;say(mode==='edit'?'Edit mode: add, move, resize and label fields.':'Fill mode: enter values in the fields, then download the PDF.');drawFields();}
+async function autoDetect(){
+ if(!window.Tesseract){say('OCR library did not load. Check your internet connection and try again.');return;}
+ $('autoDetect').disabled=true;
+ try{
+  say('Preparing OCR…');
+  const worker=await Tesseract.createWorker('eng');
+  let added=0;
+  for(let p=1;p<=state.total;p++){
+   say(`Reading page ${p} of ${state.total} with OCR…`);
+   const page=await state.pdfDoc.getPage(p),vp=page.getViewport({scale:1.6});
+   const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+   await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+   const result=await worker.recognize(c);
+   const lines=result.data.lines||[];
+   for(const line of lines){
+    const txt=(line.text||'').trim(),bb=line.bbox;
+    if(!txt||!bb)continue;
+    const labelLike=/[:：]\s*$/.test(txt)||/\b(name|address|date|phone|email|signature|postal code|city|province|title|number|amount|description)\b/i.test(txt);
+    const blankLike=/_{2,}|\.{4,}/.test(txt);
+    if(!labelLike&&!blankLike)continue;
+    const pageW=vp.width,pageH=vp.height;
+    let x=bb.x1/pageW,y=bb.y0/pageH,w=.28,h=Math.max(.026,(bb.y1-bb.y0)/pageH*1.25);
+    if(blankLike){x=bb.x0/pageW;w=clamp((bb.x1-bb.x0)/pageW,.08,.65);}
+    else {x=clamp(bb.x1/pageW+.012,0,.9);w=Math.min(.34,.98-x);}
+    if(y>.94||w<.055)continue;
+    const label=txt.replace(/[:：]\s*$/,'').replace(/_{2,}|\.{4,}/g,'').trim().slice(0,70)||'Detected field';
+    const duplicate=state.fields.some(f=>f.page===p&&Math.abs(f.x-x)<.035&&Math.abs(f.y-y)<.02);
+    if(!duplicate){state.fields.push({id:uid(),page:p,type:'text',label,value:'',x,y,w,h:Math.max(.028,h)});added++;}
+   }
+  }
+  await worker.terminate();state.page=1;await renderPage();say(`OCR finished. Added ${added} likely fields. Review and adjust every detected field before using the form.`);
+ }catch(err){console.error(err);say('OCR could not finish: '+err.message);}
+ finally{$('autoDetect').disabled=false;}
+}
+$('autoDetect').addEventListener('click',autoDetect);
+$('download').addEventListener('click',async()=>{
+ if(!state.pdfBytes)return;
+ try{
+  $('download').disabled=true;say('Writing your answers onto the original PDF…');
+  const pdfDoc=await PDFLib.PDFDocument.load(state.pdfBytes);
+  const font=await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  for(const f of state.fields){
+   const page=pdfDoc.getPage(f.page-1),size=page.getSize();
+   const x=f.x*size.width,y=size.height-(f.y+f.h)*size.height,w=f.w*size.width,h=f.h*size.height;
+   if(f.type==='checkbox'){
+    if(f.value){page.drawLine({start:{x:x+2,y:y+2},end:{x:x+w-2,y:y+h-2},thickness:1.5,color:PDFLib.rgb(0,0,0)});page.drawLine({start:{x:x+2,y:y+h-2},end:{x:x+w-2,y:y+2},thickness:1.5,color:PDFLib.rgb(0,0,0)});}
+   }else{
+    const value=String(f.value||'');if(!value)continue;
+    const fontSize=Math.max(7,Math.min(12,h*.62));
+    page.drawText(value,{x:x+3,y:y+Math.max(2,(h-fontSize)/2),size:fontSize,font,fontSize,color:PDFLib.rgb(0,0,0),maxWidth:Math.max(10,w-6)});
+   }
+  }
+  const bytes=await pdfDoc.save(),blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='completed-form.pdf';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  say('Completed PDF downloaded. Check the saved file before submitting it.');
+ }catch(err){console.error(err);say('Could not create PDF: '+err.message);}
+ finally{$('download').disabled=false;}
+});
+})();
+</script>
+</body>
+</html>
